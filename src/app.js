@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { uuid } = require('uuidv4');
+const { uuid, isUuid } = require('uuidv4');
 
 const app = express();
 
@@ -8,6 +8,29 @@ app.use(express.json());
 app.use(cors());
 
 const repositories = [];
+
+function VerifyID (request, response, next) {
+  const { id } = request.params;
+
+  if(!isUuid(id))
+    return response.status(400).json({
+      "error": "Not valid ID"
+    })
+
+  const repositoryIndex = repositories.findIndex(repository => id === repository.id);
+
+  if(repositoryIndex < 0)
+    return response.status(400).json({
+      "error": "ID not found"
+    });
+
+  response.locals.custom = true;
+  response.locals.index = repositoryIndex;
+
+  return next();
+}
+
+app.use(['/repositories/:id', '/repositories/:id/like'], VerifyID);
 
 app.get("/repositories", (request, response) => {
   return response.json(repositories);
@@ -32,23 +55,16 @@ app.post("/repositories", (request, response) => {
 app.put("/repositories/:id", (request, response) => {
   const { title, url, techs } = request.body;
   const { id } = request.params;
-
-  const repositoryIndex = repositories.findIndex(repository => id === repository.id);
-
-  if(repositoryIndex < 0)
-    return response.status(400).json({
-      "error": "ID not found"
-    });
   
   const repository = {
     id,
     title,
     url,
     techs,
-    likes: repositories[repositoryIndex].likes
+    likes: repositories[response.locals.index].likes
   }
 
-  repositories[repositoryIndex] = repository;
+  repositories[response.locals.index] = repository;
 
   return response.json(repository);
 });
@@ -56,14 +72,7 @@ app.put("/repositories/:id", (request, response) => {
 app.delete("/repositories/:id", (request, response) => {
   const { id } = request.params;
 
-  const repositoryIndex = repositories.findIndex(repository => id === repository.id);
-
-  if(repositoryIndex < 0)
-    return response.status(400).json({
-      "error": "ID not found"
-    });
-
-  repositories.splice(repositoryIndex, 1);
+  repositories.splice(response.locals.index, 1);
 
   return response.status(204).send();
 });
@@ -71,16 +80,9 @@ app.delete("/repositories/:id", (request, response) => {
 app.post("/repositories/:id/like", (request, response) => {
   const { id } = request.params;
 
-  const repositoryIndex = repositories.findIndex(repository => id === repository.id);
+  repositories[response.locals.index].likes++;
 
-  if(repositoryIndex < 0)
-    return response.status(400).json({
-      "error": "ID not found"
-    });
-
-  repositories[repositoryIndex].likes++;
-
-  return response.json(repositories[repositoryIndex]);
+  return response.json(repositories[response.locals.index]);
 });
 
 module.exports = app;
